@@ -1,0 +1,202 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+    </head>
+    <body>
+        <!-- creates upload image and reserves space for image -->
+        <input type='file' /> <img id="myImg" src="#" alt="your image" height=0 width=0>
+        <!-- canvas width and height properties are reset in script -->
+        <canvas id="canvas" width="0" height="0"></canvas>
+        <script>
+            function Node(x,y){
+                this.x = x;
+                this.y = y;
+            }
+
+            Node.prototype.distance = function(n) {
+                return Math.hypot(n.x - this.x, n.y - this.y);
+            }
+
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            var canvas = document.getElementById("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext("2d");
+
+            var graph = [];
+            var nodes = [];
+
+            function addConnection(a,b){
+                if (nodes[a] == undefined || nodes[b] == undefined) {
+                    return;
+                }
+                if (graph[a] == undefined) {
+                    graph[a] = {};
+                }
+                graph[a][b] = nodes[a].distance(nodes[b]);
+                if (graph[b] == undefined) {
+                    graph[b] = {};
+                }
+                graph[b][a] = nodes[a].distance(nodes[b]);
+            }
+
+            function shortest_path(graph, strt){
+                //create costs array
+                costs = {};
+                indices = Object.keys(graph[strt]);
+                for(var i = 0; i < indices.length; i++) {
+                    costs[indices[i]] = graph[strt][indices[i]];
+                }
+                for(let n in Object.keys(graph)) {
+                    if ((costs[n] == undefined) && (n != strt)) {
+                        costs[n] = Infinity;
+                    }
+                }
+
+                //create parents array
+                parents = {};
+                indices = Object.keys(graph[strt]);
+                for(var i = 0; i < indices.length; i++) {
+                    parents[indices[i]] = 0;
+                } 
+
+                processed = [];
+
+                //finds the lowest cost path
+                node = find_lowest_cost_node(costs, processed);
+                while (node != null){
+                    cost = costs[node];
+                    neighbors = graph[node];
+                    for (let n in neighbors){
+                        new_cost = cost + neighbors[n];
+                        if (costs[n] > new_cost){
+                            costs[n] = new_cost;
+                            parents[n] = node;
+                        }
+                    } 
+                    processed.push(node);
+                    node = find_lowest_cost_node(costs, processed);
+                }
+                return{"parents" : parents, "costs" : costs};
+            }
+
+            function find_lowest_cost_node(costs, processed) {
+                lowest_cost = Infinity;
+                lowest_cost_node = null;
+                for (node in costs){
+                    cost = costs[node];
+                    if ((cost < lowest_cost) & !(processed.includes(node))){
+                        lowest_cost = cost;
+                        lowest_cost_node = node;
+                    }
+                }
+                return lowest_cost_node;
+            }
+
+            let moved;
+            var initial_x = undefined;
+            var initial_y = undefined;
+            function mouse_down() {
+                initial_x = event.clientX;
+                initial_y = event.clientY;
+                moved = false;
+            }
+            function mouse_moved(event) { 
+                moved = true;
+            }
+            function mouse_evaluate(event) {
+                current_x = event.clientX;
+                current_y = event.clientY;
+                if (Math.hypot(initial_x - current_x, initial_y - current_y) < 5) {
+                    moved = false;
+                }
+                if (!moved) {
+                    //console.log("X: " + current_x + " Y: " + current_y);
+                    nodes.push(new Node(current_x, current_y));
+                    draw_nodes(nodes);
+                } else {
+                    i = find_nearest_node(initial_x, initial_y, nodes);
+                    j = find_nearest_node(current_x, current_y, nodes);
+                    if ((i != -1) && (j != -1)) {
+                        ctx.beginPath()
+                        ctx.moveTo(nodes[i].x, nodes[i].y);
+                        ctx.lineTo(nodes[j].x, nodes[j].y);
+                        ctx.strokestyle = "blue";
+                        ctx.stroke();
+                        ctx.closePath();
+                        addConnection(i,j);
+                    }
+                }
+            }
+
+            document.addEventListener("mousedown", mouse_down);
+            document.addEventListener("mousemove", mouse_moved);
+            document.addEventListener("mouseup", mouse_evaluate);
+
+            var map = null;
+
+            window.addEventListener('load', function() {
+                document.querySelector('input[type="file"]').addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        map = document.querySelector('img');  // $('img')[0]
+                        map.src = URL.createObjectURL(this.files[0]); // set src to blob url
+                        map.onload = load_map;
+                    }
+                });
+                });
+
+                function load_map() { 
+                    if (map != null){
+                        ctx.drawImage(map,0,0,100,100)
+                    }
+                    // update width and height ...
+                }
+
+
+            function find_nearest_node(x, y, nodes){
+                closest_distance = 10;
+                closest_index = -1;
+                for(var i = 0; i < Object.keys(nodes).length ; i++){
+                    n = nodes[i];
+                    distance = Math.hypot(n.x - x, n.y - y);
+                    //console.log(distance);
+                    if(distance < closest_distance) {
+                        closest_distance = distance;
+                        closest_index = i;
+                    }
+                }
+                return closest_index;
+            }
+
+            function draw_nodes(nodes){
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                load_map();
+
+                for(var i = 0; i < Object.keys(nodes).length; i++){
+                    n = nodes[i];
+                    ctx.beginPath()
+                    ctx.arc(n.x, n.y, 5, 0, 2 * Math.PI, false);
+                    ctx.linewidth = 2;
+                    ctx.strokestyle = "blue";
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+
+                for(var i = 0; i < Object.keys(graph).length; i++){
+                    for(var j = 0; j < Object.keys(graph[i]).length; j++) {
+                        a = Object.keys(graph)[i];
+                        b = Object.keys(graph[i])[j];
+                        ctx.beginPath()
+                        ctx.moveTo(nodes[a].x, nodes[a].y);
+                        ctx.lineTo(nodes[b].x, nodes[b].y);
+                        ctx.strokestyle = "blue";
+                        ctx.stroke();
+                        ctx.closePath();
+                    }
+                }
+            }
+
+        </script>
+    </body>
+</html>
